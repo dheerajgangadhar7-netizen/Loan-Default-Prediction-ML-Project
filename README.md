@@ -18,54 +18,51 @@ This project explores the application of supervised machine learning to classify
 - Develop a classification model to predict loan default.
 - Evaluate model performance using appropriate classification metrics.
 
-## 📂 Dataset Description
+## 3. Dataset
 
-The project uses the Loan Default Prediction dataset.
+The project uses the **Credit Risk Dataset**, available on Kaggle. It contains demographic, financial, employment, loan, and credit history information used to predict the likelihood of loan default.
 
-**Dataset Statistics:**
+- **Dataset Source:** [Kaggle – Credit Risk Dataset](https://www.kaggle.com/datasets/laotse/credit-risk-dataset)
+- **Dataset File:** `credit_risk_dataset.csv`
+- **Number of Records:** 32,581
+- **Number of Features:** 11
+- **Target Variable:** `loan_status`
+- **Problem Type:** Binary Classification
 
-| Attribute | Description |
-|---|---|
-| Total Records | 255,347 |
-| Total Columns | 18 |
-| Input Features | 17 before removing LoanID |
-| Target Variable | Default |
-| Problem Type | Binary Classification |
+### Target Variable
+
+- **0 – Non-default:** The borrower did not default on the loan.
+- **1 – Default:** The borrower defaulted on the loan.|
 
 ### Features Description
 
 The dataset contains borrower information across several categories:
 
-**1. Personal Information**
-- Age
-- Education
-- Marital Status
-- Dependents
+### **1. Personal Information**
+- Age (`person_age`)
+- Annual Income (`person_income`)
+- Home Ownership Status (`person_home_ownership`)
 
-**2. Financial Information**
-- Income
-- Loan Amount
-- Credit Score
-- Interest Rate
-- Debt-to-Income Ratio (DTIRatio)
+### **2. Employment Information**
+- Employment Length (`person_emp_length`)
 
-**3. Employment Information**
-- Employment Type
-- Months Employed
+### **3. Financial and Credit Information**
+- Loan Grade (`loan_grade`)
+- Interest Rate (`loan_int_rate`)
+- Loan Amount (`loan_amnt`)
+- Loan-to-Income Ratio (`loan_percent_income`)
+- Previous Default History (`cb_person_default_on_file`)
+- Credit History Length (`cb_person_cred_hist_length`)
 
-**4. Loan Information**
-- Loan Term
-- Number of Credit Lines
-- Loan Purpose
-- Mortgage Status
-- Co-signer Status
+### **4. Loan Information**
+- Loan Purpose (`loan_intent`)
 
-### Target Variable
+### **Target Variable**
 
-The target column is `Default`.
+The target column is `loan_status`.
 
-- 0 – Loan Not Defaulted
-- 1 – Loan Defaulted
+- **0 – Loan Not Defaulted**
+- **1 – Loan Defaulted**
 
 ## 🔍 Exploratory Data Analysis (EDA)
 
@@ -92,14 +89,13 @@ Data preprocessing was performed to prepare the dataset for machine learning.
 The following steps were included:
 
 **1. Data Cleaning**
-- Checked the dataset for missing values.
-- Checked for duplicate records.
-- Removed the unnecessary `LoanID` column because it does not provide meaningful predictive information.
+- Checked the dataset for missing values and handled missing values.
+- Checked for duplicate records and handle it.
 
 **2. Feature Selection**
 - Separated the independent variables from the target variable.
 - Selected borrower-related attributes as input features.
-- Used `Default` as the target variable.
+- Used `Loan_Status` as the target variable.
 
 **3. Encoding Categorical Variables**
 - Applied Label Encoding to the Education feature.
