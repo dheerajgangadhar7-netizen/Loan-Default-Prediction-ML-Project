@@ -2,29 +2,41 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import shap
+import matplotlib.pyplot as plt
+import numpy as np
 
-# Page configuration
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
+
 st.set_page_config(
-    page_title="Credit Risk Prediction",
+    page_title="Loan Default Prediction",
     page_icon="🏦",
     layout="wide"
 )
 
-# Load saved model and preprocessing objects
+# --------------------------------------------------
+# LOAD SAVED ARTIFACTS
+# --------------------------------------------------
+
 @st.cache_resource
 def load_artifacts():
+
     model = joblib.load("credit_risk_model.pkl")
     encoder = joblib.load("encoder.pkl")
     scaler = joblib.load("scaler.pkl")
-    return model, encoder, scaler
+    shap_background = joblib.load("shap_background.pkl")
+
+    return model, encoder, scaler, shap_background
 
 
-model, one, ss = load_artifacts()
+model, one, ss, shap_background = load_artifacts()
 
-# Exact feature order expected by the trained model
+# Exact feature order used during model training
 feature_columns = list(model.estimators_[0].feature_names_in_)
 
-# Numerical columns used during scaling
+# Numerical features scaled during training
 num_cols = [
     "person_age",
     "person_income",
@@ -35,13 +47,14 @@ num_cols = [
     "cb_person_cred_hist_length"
 ]
 
-# Missing-value medians from training data
-missing_values = {
-    "person_emp_length": 4.0,
-    "loan_int_rate": 10.99
-}
+# Categorical features one-hot encoded during training
+ohe_cols = [
+    "person_home_ownership",
+    "loan_intent",
+    "cb_person_default_on_file"
+]
 
-# Loan grade encoding (LabelEncoder alphabetical order)
+# Loan grade LabelEncoder mapping
 grade_mapping = {
     "A": 0,
     "B": 1,
@@ -52,8 +65,18 @@ grade_mapping = {
     "G": 6
 }
 
-# Application title
-st.title("🏦 Credit Risk Prediction")
+# Ensure SHAP background has the same feature order
+shap_background = shap_background.reindex(
+    columns=feature_columns,
+    fill_value=0
+)
+
+# --------------------------------------------------
+# APPLICATION TITLE
+# --------------------------------------------------
+
+st.title("🏦 Loan Default Prediction")
+
 st.write(
     "Enter the applicant's details to predict "
     "the likelihood of loan default."
@@ -61,14 +84,18 @@ st.write(
 
 st.divider()
 
-# Input form
-with st.form("credit_risk_form"):
+# --------------------------------------------------
+# INPUT FORM
+# --------------------------------------------------
+
+with st.form("loan_prediction_form"):
 
     st.subheader("Applicant Information")
 
     col1, col2 = st.columns(2)
 
     with col1:
+
         age = st.number_input(
             "Age",
             min_value=18,
@@ -109,6 +136,7 @@ with st.form("credit_risk_form"):
         )
 
     with col2:
+
         credit_history = st.number_input(
             "Credit History Length (Years)",
             min_value=0.0,
@@ -136,12 +164,16 @@ with st.form("credit_risk_form"):
         )
 
     submitted = st.form_submit_button(
-        "Predict Credit Risk"
+        "Predict Loan Default"
     )
 
-# Prediction
+# --------------------------------------------------
+# PREPROCESSING AND PREDICTION
+# --------------------------------------------------
+
 if submitted:
 
+    # Create input DataFrame
     input_data = pd.DataFrame([{
         "person_age": age,
         "person_income": income,
@@ -156,22 +188,12 @@ if submitted:
         "cb_person_cred_hist_length": credit_history
     }])
 
-    # Handle missing values
-    for col, median in missing_values.items():
-        input_data[col] = input_data[col].fillna(median)
-
     # Encode loan grade
     input_data["loan_grade"] = (
         input_data["loan_grade"].map(grade_mapping)
     )
 
     # One-hot encode categorical features
-    ohe_cols = [
-        "person_home_ownership",
-        "loan_intent",
-        "cb_person_default_on_file"
-    ]
-
     encoded = one.transform(input_data[ohe_cols])
 
     encoded_cols = one.get_feature_names_out(ohe_cols)
@@ -183,12 +205,17 @@ if submitted:
     )
 
     input_data = pd.concat(
-        [input_data.drop(columns=ohe_cols), encoded_df],
+        [
+            input_data.drop(columns=ohe_cols),
+            encoded_df
+        ],
         axis=1
     )
 
     # Scale numerical features
-    input_data[num_cols] = ss.transform(input_data[num_cols])
+    input_data[num_cols] = ss.transform(
+        input_data[num_cols]
+    )
 
     # Match exact training feature order
     input_data = input_data.reindex(
@@ -196,11 +223,16 @@ if submitted:
         fill_value=0
     )
 
-    # Predict using the combined Voting Classifier
+    # --------------------------------------------------
+    # MODEL PREDICTION
+    # --------------------------------------------------
+
     prediction = model.predict(input_data)[0]
+
     probability = model.predict_proba(input_data)[0][1]
 
     st.divider()
+
     st.subheader("Prediction Result")
 
     st.metric(
@@ -209,8 +241,11 @@ if submitted:
     )
 
     if prediction == 1:
+
         st.error("⚠️ Prediction: Loan Default")
+
     else:
+
         st.success("✅ Prediction: No Loan Default")
 
     st.caption(
@@ -218,3 +253,109 @@ if submitted:
         "not a guarantee of the applicant's future repayment behaviour."
     )
 
+    # --------------------------------------------------
+    # SHAP EXPLANATION
+    # --------------------------------------------------
+
+    st.divider()
+
+    st.subheader("Why did the model make this prediction?")
+
+    st.write(
+        "The chart below shows which features contributed "
+        "to the predicted loan default probability."
+    )
+
+    with st.spinner("Calculating SHAP explanation..."):
+
+        # Prediction function for SHAP
+        def predict_probability(data):
+
+            data = pd.DataFrame(
+                data,
+                columns=feature_columns
+            )
+
+            return model.predict_proba(data)[:, 1]
+
+        # Create KernelExplainer
+        explainer = shap.KernelExplainer(
+            predict_probability,
+            shap_background
+        )
+
+        # Calculate SHAP values for this applicant
+        shap_values = explainer.shap_values(
+            input_data,
+            nsamples=100
+        )
+
+        # Extract class 1 (loan default) SHAP values
+        if isinstance(shap_values, list):
+
+            default_shap_values = np.asarray(
+                shap_values[1]
+            )[0]
+
+        else:
+
+            shap_array = np.asarray(shap_values)
+
+            if shap_array.ndim == 3:
+
+                if shap_array.shape[-1] == 2:
+                    shap_array = shap_array[:, :, 1]
+
+                elif shap_array.shape[0] == 2:
+                    shap_array = shap_array[1]
+
+            default_shap_values = shap_array[0]
+
+        # Create SHAP importance DataFrame
+        shap_df = pd.DataFrame({
+            "Feature": feature_columns,
+            "SHAP Value": default_shap_values
+        })
+
+        # Select 10 most influential features
+        shap_df["Absolute Value"] = (
+            shap_df["SHAP Value"].abs()
+        )
+
+        shap_df = shap_df.sort_values(
+            by="Absolute Value",
+            ascending=True
+        ).tail(10)
+
+        # Plot SHAP results
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.barh(
+            shap_df["Feature"],
+            shap_df["SHAP Value"]
+        )
+
+        ax.axvline(
+            x=0,
+            linewidth=1
+        )
+
+        ax.set_xlabel(
+            "SHAP Value (effect on default probability)"
+        )
+
+        ax.set_title(
+            "Top Features Influencing Loan Default Prediction"
+        )
+
+        plt.tight_layout()
+
+        st.pyplot(fig)
+
+        plt.close(fig)
+
+    st.info(
+        "Positive SHAP values push the prediction towards a higher "
+        "loan default probability. Negative SHAP values push it "
+        "towards a lower loan default probability."
+    )
