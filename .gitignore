@@ -5,4 +5,6 @@ __pycache__/
 venv/
 .venv/
 *.pkl
+
+.venv/*.pkl
 credit_risk_dataset.csv
